@@ -2,7 +2,7 @@
 import { ensureSchema, loadDtek, allAddressesWithUsers, getCache, setCache, markSent, now } from "./db.js";
 import { fetchHouses } from "./dtek.js";
 import { timeline, events, clock, hashDay, dayKeys, groupLabel } from "./schedule.js";
-import { renderGraph, graphButtons } from "./render.js";
+import { graphButtons, daySummary } from "./render.js";
 import { send, esc, inline } from "./tg.js";
 
 const WINDOW = 6 * 60; // окно срабатывания (сек) — чуть больше шага cron
@@ -56,9 +56,9 @@ export async function runCron(env) {
         const hit = a.groups.map((g) => changed.get(`${day}|${g}`)).find(Boolean);
         if (!hit) continue;
         const dayIndex = day > Number(d.fact.today) ? 1 : 0;
-        const title = hit === "new" ? "📅 Появился график на завтра" : `📅 График на ${dayIndex ? "завтра" : "сегодня"} изменился`;
+        const what = hit === "new" ? "появился график на завтра" : `график на ${dayIndex ? "завтра" : "сегодня"} изменился`;
         const key = `chg|${a.id}|${day}|${a.groups.map((g) => hashes[`${day}|${g}`]).join(",")}`;
-        await notify(a, key, `${title}\n\n${renderGraph(a, d.fact, dayIndex, d.factAt)}`, inline(graphButtons(a, dayIndex)));
+        await notify(a, key, `📅 <b>${esc(a.name)}</b> — ${what}\n<i>${daySummary(a, d.fact, day)}</i>`, inline(graphButtons(a, dayIndex)));
       }
     }
 
@@ -87,7 +87,7 @@ export async function runCron(env) {
           if (groups.length && JSON.stringify(groups) !== JSON.stringify(a.groups)) {
             await env.DB.prepare("UPDATE addresses SET groups = ? WHERE id = ?").bind(JSON.stringify(groups), a.id).run();
             if (a.notify_changes) {
-              await notify(a, `grp|${a.id}|${groups.join(",")}`, `🔁 ${esc(a.name)}: ДТЕК поменял очередь на ⚡ ${groups.map(groupLabel).join(", ")}`);
+              await notify(a, `grp|${a.id}|${groups.join(",")}`, `🔁 <b>${esc(a.name)}</b> — очередь изменилась\n<i>теперь ${groups.map(groupLabel).join(", ")}</i>`);
             }
             a.groups = groups;
           }
@@ -99,12 +99,12 @@ export async function runCron(env) {
           await setCache(env, stateKey, cur);
           if (!a.notify_emergency) continue;
           if (cur) {
-            const was = prev.value ? "🔄 Обновление: " : "";
-            const end = h.end_date ? `, ориентировочно до ${esc(h.end_date)}` : "";
+            const upd = prev.value ? " (обновлено)" : "";
+            const end = h.end_date ? ` · примерно до ${esc(h.end_date)}` : "";
             await notify(a, `out|${a.id}|${cur}`,
-              `🚨 ${was}<b>${esc(a.name)}</b>: ${esc(h.sub_type)}\n🕒 С ${esc(h.start_date || "—")}${end}`);
+              `🚨 <b>${esc(a.name)}</b> — ${esc(String(h.sub_type).toLowerCase())}${upd}\n<i>с ${esc(h.start_date || "—")}${end}</i>`);
           } else {
-            await notify(a, `outend|${a.id}|${prev.value}`, `💡 <b>${esc(a.name)}</b>: по данным ДТЕК отключение закончилось`);
+            await notify(a, `outend|${a.id}|${prev.value}`, `💡 <b>${esc(a.name)}</b> — отключение закончилось\n<i>по данным ДТЕК</i>`);
           }
         }
       }
@@ -126,13 +126,13 @@ export async function runCron(env) {
           seen.add(key);
           const mins = Math.max(1, Math.round(until / 60));
           let text;
+          const until2 = ev.until ? ` · до ${clock(ev.until)}` : "";
           if (ev.kind === "off") {
-            const range = `${clock(ev.t)}–${ev.until ? clock(ev.until) : "…"}`;
             text = ev.maybe
-              ? `🟡 <b>${esc(a.name)}</b>: через ${mins} мин возможно отключение (${range})`
-              : `⚠️ <b>${esc(a.name)}</b>: через ${mins} мин выключат свет (${range}). Заряди телефон 🔋`;
+              ? `🟡 <b>${esc(a.name)}</b> — возможно отключение в ${clock(ev.t)}\n<i>через ${mins} мин${until2}</i>`
+              : `⚠️ <b>${esc(a.name)}</b> — свет выключат в ${clock(ev.t)}\n<i>через ${mins} мин${until2}</i>`;
           } else {
-            text = `💡 <b>${esc(a.name)}</b>: через ${mins} мин должны включить свет (в ${clock(ev.t)})`;
+            text = `💡 <b>${esc(a.name)}</b> — свет включат в ${clock(ev.t)}\n<i>через ${mins} мин</i>`;
           }
           await notify(a, key, text);
         }
