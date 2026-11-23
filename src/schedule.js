@@ -111,7 +111,7 @@ export function nowStatus(tl, now) {
 
 // Время по Киеву
 const fmt = new Intl.DateTimeFormat("en-GB", { timeZone: TZ, hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
-const fmtDate = new Intl.DateTimeFormat("ru-RU", { timeZone: TZ, weekday: "short", day: "2-digit", month: "2-digit" });
+const fmtDate = new Intl.DateTimeFormat("ru-RU", { timeZone: TZ, weekday: "short", day: "numeric", month: "long" });
 export const clock = (ts) => fmt.format(new Date(ts * 1000));
 export const dateLabel = (ts) => fmtDate.format(new Date(ts * 1000 + 3600 * 1000));
 export function kyivHour(ts) {

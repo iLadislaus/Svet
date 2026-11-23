@@ -20,21 +20,14 @@ export const esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "
 
 export const inline = (rows) => ({ reply_markup: { inline_keyboard: rows } });
 
-export const MAIN_KB = {
-  reply_markup: {
-    keyboard: [
-      [{ text: "📊 График" }, { text: "🏠 Мои адреса" }],
-      [{ text: "➕ Добавить адрес" }, { text: "🔔 Уведомления" }],
-    ],
-    resize_keyboard: true,
-    is_persistent: true,
-  },
-};
+// Нижняя клавиатура не используется — только кнопка «Меню» с командами
+export const NO_KB = { reply_markup: { remove_keyboard: true } };
 
 export const ADD_KB = {
   reply_markup: {
-    keyboard: [[{ text: "📍 Отправить геопозицию", request_location: true }], [{ text: "❌ Отмена" }]],
+    keyboard: [[{ text: "📍 Отправить геопозицию", request_location: true }], [{ text: "Отмена" }]],
     resize_keyboard: true,
+    one_time_keyboard: true,
   },
 };
 
