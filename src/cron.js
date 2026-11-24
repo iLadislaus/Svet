@@ -58,7 +58,7 @@ export async function runCron(env) {
         const dayIndex = day > Number(d.fact.today) ? 1 : 0;
         const what = hit === "new" ? "появился график на завтра" : `график на ${dayIndex ? "завтра" : "сегодня"} изменился`;
         const key = `chg|${a.id}|${day}|${a.groups.map((g) => hashes[`${day}|${g}`]).join(",")}`;
-        await notify(a, key, `📅 <b>${esc(a.name)}</b> — ${what}\n${daySummary(a, d.fact, day)}`, inline(graphButtons(a, dayIndex)));
+        await notify(a, key, `📅 <b>${esc(a.name)}</b> — ${what}\n\n${daySummary(a, d.fact, day)}`, inline(graphButtons(a, dayIndex)));
       }
     }
 
@@ -90,7 +90,7 @@ export async function runCron(env) {
             await env.DB.prepare("UPDATE addresses SET groups = ? WHERE id = ?").bind(JSON.stringify(groups), a.id).run();
             if (a.notify_changes) {
               await notify(a, `grp|${a.id}|${groups.join(",")}`,
-                `🔁 <b>${esc(a.name)}</b> — очередь изменилась\n<i>была ${was} → стала ${groups.map(groupLabel).join(", ")}</i>`);
+                `🔁 <b>${esc(a.name)}</b> — очередь изменилась\n\n<i>была ${was} → стала ${groups.map(groupLabel).join(", ")}</i>`);
             }
             a.groups = groups;
           }
@@ -110,9 +110,9 @@ export async function runCron(env) {
             const len = from && to ? ` · ~${dur(Math.round((to.ts - from.ts) / 60))}` : "";
             const range = from ? ` · с ${from.label}${to ? ` до ${to.label}` : ""}${len}` : "";
             const upd = prev ? " (обновлено)" : "";
-            await notify(a, `out|${a.id}|${cur}`, `${kind.icon} <b>${esc(a.name)}</b> — ${kind.text}${upd}\n<i>${q}${range}</i>`);
+            await notify(a, `out|${a.id}|${cur}`, `${kind.icon} <b>${esc(a.name)}</b> — ${kind.text}${upd}\n\n<i>${q}${range}</i>`);
           } else {
-            await notify(a, `outend|${a.id}|${prev}`, `💡 <b>${esc(a.name)}</b> — свет должен быть\n<i>${q} · отключение по данным ДТЕК закончилось</i>`);
+            await notify(a, `outend|${a.id}|${prev}`, `💡 <b>${esc(a.name)}</b> — свет должен быть\n\n<i>${q} · отключение по данным ДТЕК закончилось</i>`);
           }
         }
       }
@@ -142,10 +142,10 @@ export async function runCron(env) {
       let text;
       if (ev.kind === "off") {
         text = ev.maybe
-          ? `🟡 <b>${esc(a.name)}</b> — возможно отключение в ${clock(ev.t)}\n<i>${q} · через ${mins} мин${until2}</i>`
-          : `⚠️ <b>${esc(a.name)}</b> — свет выключат в ${clock(ev.t)}\n<i>${q} · через ${mins} мин${until2}</i>`;
+          ? `🟡 <b>${esc(a.name)}</b> — возможно отключение в ${clock(ev.t)}\n\n<i>${q} · через ${mins} мин${until2}</i>`
+          : `⚠️ <b>${esc(a.name)}</b> — свет выключат в ${clock(ev.t)}\n\n<i>${q} · через ${mins} мин${until2}</i>`;
       } else {
-        text = `💡 <b>${esc(a.name)}</b> — свет включат в ${clock(ev.t)}\n<i>${q} · через ${mins} мин</i>`;
+        text = `💡 <b>${esc(a.name)}</b> — свет включат в ${clock(ev.t)}\n\n<i>${q} · через ${mins} мин</i>`;
       }
       await notify(a, key, text);
     }

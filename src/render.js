@@ -47,10 +47,10 @@ export function renderGraph(a, fact, dayIndex = 0, factAt = null) {
   const out = [`${/^[\p{L}\p{N}]/u.test(a.name) ? "🏠 " : ""}<b>${esc(a.name)}</b> · ${addrShort(a)}`];
   if (!a.groups.length) return out.concat("", "ДТЕК не указал очередь для этого дома").join("\n");
   if (!key) {
-    out.push(`<i>${groupsEmoji(a)} очередь</i>`, "", "График на завтра ещё не опубликован.\nПришлю, как только появится.");
+    out.push("", `<i>${groupsEmoji(a)} очередь</i>`, "", "График на завтра ещё не опубликован.\nПришлю, как только появится.");
     return out.join("\n");
   }
-  out.push(`<i>${groupsEmoji(a)} очередь · ${dateLabel(key)}</i>`);
+  out.push("", `<i>${groupsEmoji(a)} очередь · ${dateLabel(key)}</i>`);
   const t = now();
   a.groups.forEach((g, i) => {
     const slots = daySlots(fact, key, g);
@@ -83,9 +83,9 @@ export function daySummary(a, fact, dayKey) {
     const slots = daySlots(fact, dayKey, g);
     if (!slots) continue;
     const { offMin } = offList(slots);
-    const list = intervals(slots).map((x) => `${x.type === "maybe" ? "🟡" : "🔴"} ${hm(x.from)}–${hm(x.to)}${x.type === "maybe" ? "?" : ""}`);
-    const txt = list.length ? list.join("  ") + (offMin ? ` · ${dur(offMin)}` : "") : "🟢 отключений нет";
-    lines.push(`<i>${groupEmoji(g)} очередь:</i> ${txt}`);
+    const list = intervals(slots).map((x) => `${x.type === "maybe" ? "🟡" : "🔴"} ${hm(x.from)} – ${hm(x.to)}${x.type === "maybe" ? " <i>возможно</i>" : ""}`);
+    const body = list.length ? `${list.join("\n")}${offMin ? `\n\n<i>Без света · ${dur(offMin)}</i>` : ""}` : "🟢 отключений нет";
+    lines.push(`<b>${groupEmoji(g)} очередь</b>\n\n${body}`);
   }
-  return lines.join("\n") || "<i>нет данных</i>";
+  return lines.join("\n\n· · ·\n\n") || "<i>нет данных</i>";
 }

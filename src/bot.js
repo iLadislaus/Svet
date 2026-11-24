@@ -6,8 +6,8 @@ import {
 } from "./db.js";
 import { fetchHouses, DEFAULT_CITY } from "./dtek.js";
 import { search } from "./fuzzy.js";
-import { renderGraph, graphButtons, addrShort, groupsText } from "./render.js";
-import { groupLabel } from "./schedule.js";
+import { renderGraph, graphButtons, addrShort, groupsEmoji } from "./render.js";
+import { groupLabel, groupEmoji } from "./schedule.js";
 
 const HELLO =
   "⚡ <b>Свет</b>\nПредупреждаю об отключениях света по твоим адресам в Одессе и области.\n\n" +
@@ -75,7 +75,7 @@ async function showAddresses(env, chatId, messageId = null) {
   const rows = chunk(list.map((a) => ({ text: a.name, callback_data: `a:${a.id}` })), 2);
   rows.push([{ text: "➕ Добавить адрес", callback_data: "add" }]);
   const text = list.length
-    ? "<b>Мои адреса</b>\n" + list.map((a) => `${esc(a.name)} <i>· ${addrShort(a)} · ${groupsText(a)}</i>`).join("\n")
+    ? "<b>Мои адреса</b>\n" + list.map((a) => `${esc(a.name)} <i>· ${addrShort(a)} · ${groupsEmoji(a)}</i>`).join("\n")
     : "<b>Мои адреса</b>\nПока пусто";
   return messageId ? edit(env, chatId, messageId, text, inline(rows)) : send(env, chatId, text, inline(rows));
 }
@@ -83,7 +83,7 @@ async function showAddresses(env, chatId, messageId = null) {
 async function showAddressCard(env, chatId, messageId, a) {
   const city = a.city !== DEFAULT_CITY ? ` · ${esc(a.city)}` : "";
   return edit(env, chatId, messageId,
-    `<b>${esc(a.name)}</b>\n<i>${addrShort(a)}${city} · очередь ${groupsText(a)}</i>`,
+    `<b>${esc(a.name)}</b>\n\n<i>${addrShort(a)}${city}</i>\n<i>${groupsEmoji(a)} очередь</i>`,
     inline([
       [{ text: "График", callback_data: `gn:${a.id}` }],
       [{ text: "Переименовать", callback_data: `ren:${a.id}` }, { text: "Удалить", callback_data: `del:${a.id}` }],
@@ -177,9 +177,9 @@ async function onHouseText(env, chatId, text, data) {
 async function chooseHouse(env, chatId, data, house) {
   const groups = data.houses?.[house] || [];
   await setState(env, chatId, "add_name", { city: data.city, street: data.street, house, groups });
-  const g = groups.length ? groups.map(groupLabel).join(", ") : "не указана";
+  const g = groups.length ? groups.map(groupEmoji).join(", ") + " очередь" : "очередь не указана";
   return send(env, chatId,
-    `<b>${esc(data.street)}, ${esc(house)}</b>\n<i>Очередь ${g}</i>\n\nКак назвать адрес? Выбери или напиши своё`,
+    `<b>${esc(data.street)}, ${esc(house)}</b>\n<i>${g}</i>\n\nКак назвать адрес? Выбери или напиши своё`,
     inline(chunk(["🏠 Дом", "💼 Работа", "👵 Родители", "🏡 Дача"].map((n) => ({ text: n, callback_data: `nm:${n}` })), 2)));
 }
 
