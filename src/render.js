@@ -74,15 +74,15 @@ export function graphButtons(a, dayIndex) {
   ]];
 }
 
-// Короткая сводка дня для уведомления об изменении графика
+// Сводка дня для уведомления об изменении графика — по каждой очереди
 export function daySummary(a, fact, dayKey) {
-  const parts = [];
+  const lines = [];
   for (const g of a.groups) {
     const slots = daySlots(fact, dayKey, g);
     if (!slots) continue;
-    const { lines } = offList(slots);
-    parts.push(lines.length ? lines.join(", ").replace(/ <i>возможно<\/i>/g, "?") : "отключений нет");
+    const { lines: list } = offList(slots);
+    const txt = list.length ? list.join(", ").replace(/ <i>возможно<\/i>/g, "?") : "отключений нет";
+    lines.push(`<i>очередь ${groupLabel(g)}:</i> ${txt}`);
   }
-  const s = [...new Set(parts)].join(" / ");
-  return s && s !== "отключений нет" ? `без света ${s}` : "отключений нет";
+  return lines.join("\n") || "<i>нет данных</i>";
 }

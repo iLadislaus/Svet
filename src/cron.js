@@ -58,7 +58,7 @@ export async function runCron(env) {
         const dayIndex = day > Number(d.fact.today) ? 1 : 0;
         const what = hit === "new" ? "появился график на завтра" : `график на ${dayIndex ? "завтра" : "сегодня"} изменился`;
         const key = `chg|${a.id}|${day}|${a.groups.map((g) => hashes[`${day}|${g}`]).join(",")}`;
-        await notify(a, key, `📅 <b>${esc(a.name)}</b> — ${what}\n<i>${daySummary(a, d.fact, day)}</i>`, inline(graphButtons(a, dayIndex)));
+        await notify(a, key, `📅 <b>${esc(a.name)}</b> — ${what}\n${daySummary(a, d.fact, day)}`, inline(graphButtons(a, dayIndex)));
       }
     }
 
@@ -111,9 +111,9 @@ export async function runCron(env) {
     }
   }
 
-  // ⚠️💡 Предупреждения перед выключением и включением
+  // ⚠️💡 Предупреждения перед выключением и включением (с указанием очереди)
   for (const a of addrs) {
-    const seen = new Set();
+    const due = new Map(); // одно событие у нескольких очередей → одно сообщение
     for (const g of a.groups) {
       for (const ev of events(timeline(d.fact, g))) {
         const until = ev.t - t;
@@ -122,21 +122,24 @@ export async function runCron(env) {
         for (const m of list) {
           if (until > m * 60 || until <= m * 60 - WINDOW) continue;
           const key = `ev|${a.id}|${ev.kind}|${ev.t}|${m}`;
-          if (seen.has(key)) continue;
-          seen.add(key);
-          const mins = Math.max(1, Math.round(until / 60));
-          let text;
-          const until2 = ev.until ? ` · до ${clock(ev.until)}` : "";
-          if (ev.kind === "off") {
-            text = ev.maybe
-              ? `🟡 <b>${esc(a.name)}</b> — возможно отключение в ${clock(ev.t)}\n<i>через ${mins} мин${until2}</i>`
-              : `⚠️ <b>${esc(a.name)}</b> — свет выключат в ${clock(ev.t)}\n<i>через ${mins} мин${until2}</i>`;
-          } else {
-            text = `💡 <b>${esc(a.name)}</b> — свет включат в ${clock(ev.t)}\n<i>через ${mins} мин</i>`;
-          }
-          await notify(a, key, text);
+          if (!due.has(key)) due.set(key, { ev, until, groups: [] });
+          due.get(key).groups.push(groupLabel(g));
         }
       }
+    }
+    for (const [key, { ev, until, groups }] of due) {
+      const mins = Math.max(1, Math.round(until / 60));
+      const q = `очередь ${groups.join(", ")}`;
+      const until2 = ev.until ? ` · до ${clock(ev.until)}` : "";
+      let text;
+      if (ev.kind === "off") {
+        text = ev.maybe
+          ? `🟡 <b>${esc(a.name)}</b> — возможно отключение в ${clock(ev.t)}\n<i>${q} · через ${mins} мин${until2}</i>`
+          : `⚠️ <b>${esc(a.name)}</b> — свет выключат в ${clock(ev.t)}\n<i>${q} · через ${mins} мин${until2}</i>`;
+      } else {
+        text = `💡 <b>${esc(a.name)}</b> — свет включат в ${clock(ev.t)}\n<i>${q} · через ${mins} мин</i>`;
+      }
+      await notify(a, key, text);
     }
   }
 
