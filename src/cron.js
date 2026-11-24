@@ -1,8 +1,8 @@
 // ⏰ Cron каждые 5 минут: обновление данных ДТЕК, изменения графика, аварии, предупреждения
 import { ensureSchema, loadDtek, allAddressesWithUsers, getCache, setCache, markSent, now } from "./db.js";
 import { fetchHouses } from "./dtek.js";
-import { timeline, events, clock, hashDay, dayKeys, groupLabel } from "./schedule.js";
-import { graphButtons, daySummary } from "./render.js";
+import { timeline, events, clock, hashDay, dayKeys, groupLabel, groupEmoji, qEmoji } from "./schedule.js";
+import { graphButtons, daySummary, dur } from "./render.js";
 import { send, esc, inline } from "./tg.js";
 
 const WINDOW = 6 * 60; // окно срабатывания (сек) — чуть больше шага cron
@@ -79,32 +79,40 @@ export async function runCron(env) {
           console.error("houses failed", k, e);
           continue;
         }
+        const houseState = new Map(); // состояние отключения считаем один раз на дом
         for (const a of list) {
           const h = houses[a.house];
           if (!h) continue;
           // очередь дома могла смениться
           const groups = h.sub_type_reason || [];
           if (groups.length && JSON.stringify(groups) !== JSON.stringify(a.groups)) {
+            const was = a.groups.map(groupLabel).join(", ") || "—";
             await env.DB.prepare("UPDATE addresses SET groups = ? WHERE id = ?").bind(JSON.stringify(groups), a.id).run();
             if (a.notify_changes) {
-              await notify(a, `grp|${a.id}|${groups.join(",")}`, `🔁 <b>${esc(a.name)}</b> — очередь изменилась\n<i>теперь ${groups.map(groupLabel).join(", ")}</i>`);
+              await notify(a, `grp|${a.id}|${groups.join(",")}`,
+                `🔁 <b>${esc(a.name)}</b> — очередь изменилась\n<i>была ${was} → стала ${groups.map(groupLabel).join(", ")}</i>`);
             }
             a.groups = groups;
           }
           const stateKey = `out:${a.city}|${a.street}|${a.house}`;
-          const cur = h.sub_type ? `${h.sub_type}|${h.start_date}|${h.end_date}` : "";
-          const prev = await getCache(env, stateKey);
-          if (!prev) { await setCache(env, stateKey, cur); continue; }
-          if (prev.value === cur) continue;
-          await setCache(env, stateKey, cur);
-          if (!a.notify_emergency) continue;
+          if (!houseState.has(stateKey)) {
+            const cur = h.sub_type ? `${h.sub_type}|${h.start_date}|${h.end_date}` : "";
+            const prev = await getCache(env, stateKey);
+            if (!prev || prev.value !== cur) await setCache(env, stateKey, cur);
+            houseState.set(stateKey, { cur, prev: prev ? prev.value : null });
+          }
+          const { cur, prev } = houseState.get(stateKey);
+          if (prev === null || prev === cur || !a.notify_emergency) continue;
+          const q = `${a.groups.map(groupEmoji).join(", ") || "—"} очередь`;
           if (cur) {
-            const upd = prev.value ? " (обновлено)" : "";
-            const end = h.end_date ? ` · примерно до ${esc(h.end_date)}` : "";
-            await notify(a, `out|${a.id}|${cur}`,
-              `🚨 <b>${esc(a.name)}</b> — ${esc(String(h.sub_type).toLowerCase())}${upd}\n<i>с ${esc(h.start_date || "—")}${end}</i>`);
+            const kind = outageKind(h.sub_type);
+            const from = dtekTime(h.start_date, t), to = dtekTime(h.end_date, t);
+            const len = from && to ? ` · ~${dur(Math.round((to.ts - from.ts) / 60))}` : "";
+            const range = from ? ` · с ${from.label}${to ? ` до ${to.label}` : ""}${len}` : "";
+            const upd = prev ? " (обновлено)" : "";
+            await notify(a, `out|${a.id}|${cur}`, `${kind.icon} <b>${esc(a.name)}</b> — ${kind.text}${upd}\n<i>${q}${range}</i>`);
           } else {
-            await notify(a, `outend|${a.id}|${prev.value}`, `💡 <b>${esc(a.name)}</b> — отключение закончилось\n<i>по данным ДТЕК</i>`);
+            await notify(a, `outend|${a.id}|${prev}`, `💡 <b>${esc(a.name)}</b> — свет должен быть\n<i>${q} · отключение по данным ДТЕК закончилось</i>`);
           }
         }
       }
@@ -129,8 +137,8 @@ export async function runCron(env) {
     }
     for (const [key, { ev, until, groups }] of due) {
       const mins = Math.max(1, Math.round(until / 60));
-      const q = `очередь ${groups.join(", ")}`;
-      const until2 = ev.until ? ` · до ${clock(ev.until)}` : "";
+      const q = `${groups.map((x) => qEmoji(x)).join(", ")} очередь`;
+      const until2 = ev.until ? ` · до ${clock(ev.until)} · ${dur(Math.round((ev.until - ev.t) / 60))} без света` : "";
       let text;
       if (ev.kind === "off") {
         text = ev.maybe
@@ -146,4 +154,24 @@ export async function runCron(env) {
   // 🧹 Чистка старых отметок
   await env.DB.prepare("DELETE FROM sent WHERE created_at < ?").bind(t - 4 * 86400).run();
   return out;
+}
+
+// Тип отключения по тексту ДТЕК
+function outageKind(subType) {
+  const s = String(subType || "").toLowerCase();
+  if (s.includes("стабілізац") || s.includes("графік")) return { icon: "⚡", text: "отключение по графику" };
+  if (s.includes("аварі")) return { icon: "🚨", text: "аварийное отключение" };
+  if (s.includes("планов") || s.includes("ремонт")) return { icon: "🛠", text: "плановое отключение (ремонт)" };
+  return { icon: "⚡", text: esc(s) || "отключение" };
+}
+
+// «11:14 24.11.2026» → { ts, label: "11:14" (сегодня) или "11:14 25.11" }
+function dtekTime(str, nowTs) {
+  const m = String(str || "").match(/(\d{1,2}):(\d{2})\s+(\d{1,2})\.(\d{1,2})\.(\d{4})/);
+  if (!m) return null;
+  const [, H, M, d, mo, y] = m;
+  const ts = Date.UTC(+y, +mo - 1, +d, +H, +M) / 1000; // «киевское» время как UTC — годится для разницы и сравнения дат
+  const today = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Kyiv", day: "2-digit", month: "2-digit" }).format(new Date(nowTs * 1000));
+  const same = today === `${d.padStart(2, "0")}/${mo.padStart(2, "0")}`;
+  return { ts, label: same ? `${H.padStart(2, "0")}:${M}` : `${H.padStart(2, "0")}:${M} ${d.padStart(2, "0")}.${mo.padStart(2, "0")}` };
 }

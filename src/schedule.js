@@ -11,6 +11,10 @@ const SLOT_MAP = {
 };
 
 export const groupLabel = (g) => g.replace("GPV", "");
+const NUM = ["0️⃣","1️⃣","2️⃣","3️⃣","4️⃣","5️⃣","6️⃣","7️⃣","8️⃣","9️⃣"];
+// «4.1» → «4️⃣.1️⃣»
+export const qEmoji = (label) => String(label).replace(/\d/g, (d) => NUM[+d]);
+export const groupEmoji = (g) => qEmoji(groupLabel(g));
 
 // 48 получасовых слотов дня для группы
 export function daySlots(fact, dayKey, group) {
